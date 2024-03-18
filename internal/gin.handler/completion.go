@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/bincooo/chatgpt-adapter/v2/internal/common"
 	"github.com/bincooo/chatgpt-adapter/v2/internal/middle"
 	"github.com/bincooo/chatgpt-adapter/v2/internal/middle/bing"
 	"github.com/bincooo/chatgpt-adapter/v2/internal/middle/claude"
@@ -11,6 +13,7 @@ import (
 	"github.com/bincooo/chatgpt-adapter/v2/internal/middle/sd"
 	"github.com/bincooo/chatgpt-adapter/v2/pkg/gpt"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"regexp"
 	"strings"
 )
@@ -22,18 +25,28 @@ func completions(ctx *gin.Context) {
 		return
 	}
 
+	matchers := common.XmlPlot(ctx, chatCompletionRequest.Messages)
+	if ctx.GetBool("debug") {
+		indent, err := json.MarshalIndent(chatCompletionRequest, "", "  ")
+		if err != nil {
+			logrus.Warn(err)
+		} else {
+			fmt.Printf("requset: \n%s", indent)
+		}
+	}
+
 	switch chatCompletionRequest.Model {
 	case "bing":
-		bing.Complete(ctx, chatCompletionRequest)
+		bing.Complete(ctx, chatCompletionRequest, matchers)
 	case "claude":
-		claude.Complete(ctx, chatCompletionRequest)
+		claude.Complete(ctx, chatCompletionRequest, matchers)
 	case "gemini":
-		gemini.Complete(ctx, chatCompletionRequest)
+		gemini.Complete(ctx, chatCompletionRequest, matchers)
 	case "coze":
-		coze.Complete(ctx, chatCompletionRequest)
+		coze.Complete(ctx, chatCompletionRequest, matchers)
 	default:
 		if strings.HasPrefix(chatCompletionRequest.Model, "claude-") {
-			claude.Complete(ctx, chatCompletionRequest)
+			claude.Complete(ctx, chatCompletionRequest, matchers)
 		} else {
 			middle.ResponseWithV(ctx, -1, fmt.Sprintf("model '%s' is not not yet supported", chatCompletionRequest.Model))
 		}
@@ -50,8 +63,15 @@ func generations(ctx *gin.Context) {
 	token := ctx.GetString("token")
 	if strings.Contains(token, "[msToken") {
 		chatGenerationRequest.Model = "coze." + chatGenerationRequest.Model
-		//} else if strings.HasPrefix(token, "AIzaSy") {
-		//	chatGenerationRequest.Model = "gemini." + chatGenerationRequest.Model
+	} else if token == "sk-prodia-xl" {
+		ctx.Set("prodia.space", "xl")
+		chatGenerationRequest.Model = "xl." + chatGenerationRequest.Model
+	} else if token == "sk-prodia-sd" {
+		ctx.Set("prodia.space", "sd")
+		chatGenerationRequest.Model = "sd." + chatGenerationRequest.Model
+	} else if token == "sk-krebzonide" {
+		ctx.Set("prodia.space", "kb")
+		chatGenerationRequest.Model = "kb." + chatGenerationRequest.Model
 	} else if ok, _ := regexp.MatchString(`\w{8,10}-\w{4}-\w{4}-\w{4}-\w{10,15}`, token); ok {
 		chatGenerationRequest.Model = "pg." + chatGenerationRequest.Model
 	} else {
@@ -59,11 +79,9 @@ func generations(ctx *gin.Context) {
 	}
 
 	switch chatGenerationRequest.Model {
-	//case "bing.dall-e-3":
-	// oneapi目前只认dall-e-3
 	case "coze.dall-e-3":
 		coze.Generation(ctx, chatGenerationRequest)
-	case "sd.dall-e-3":
+	case "xl.dall-e-3", "sd.dall-e-3", "kb.dall-e-3", "dall-e-3":
 		sd.Generation(ctx, chatGenerationRequest)
 	case "pg.dall-e-3":
 		pg.Generation(ctx, chatGenerationRequest)
