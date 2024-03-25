@@ -3,10 +3,11 @@ module github.com/bincooo/chatgpt-adapter/v2
 go 1.21.6
 
 require (
-	github.com/bincooo/claude-api v1.0.4-0.20240302022752-df7d854f32a6
-	github.com/bincooo/coze-api v1.0.1-0.20240318071710-81ef17ed7651
+	github.com/bincooo/claude-api v1.0.4-0.20240323131054-e8068584fb71
+	github.com/bincooo/coze-api v1.0.1-0.20240323121509-fa2c4586e365
 	github.com/bincooo/edge-api v1.0.3-1.1630.0
 	github.com/bincooo/sdio v0.0.0-20240307130432-7248b54caf4f
+	github.com/dlclark/regexp2 v1.7.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.6.0
 	github.com/samber/go-gpt-3-encoder v0.3.1
@@ -23,7 +24,6 @@ require (
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
-	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gaukas/godicttls v0.0.3 // indirect

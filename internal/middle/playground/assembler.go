@@ -2,10 +2,13 @@ package pg
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/bincooo/chatgpt-adapter/v2/internal/common"
 	"github.com/bincooo/chatgpt-adapter/v2/internal/middle"
+	"github.com/bincooo/chatgpt-adapter/v2/pkg"
 	"github.com/bincooo/chatgpt-adapter/v2/pkg/gpt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -105,6 +108,7 @@ func Generation(ctx *gin.Context, req gpt.ChatGenerationRequest) {
 	var (
 		cookie  = ctx.GetString("token")
 		proxies = ctx.GetString("proxies")
+		domain  = pkg.Config.GetString("domain")
 	)
 
 	model := convertToModel(req.Style)
@@ -132,8 +136,13 @@ func Generation(ctx *gin.Context, req gpt.ChatGenerationRequest) {
 	}
 
 	marshal, _ := json.Marshal(payload)
-	response, err := fetch("", cookie, marshal)
+	response, err := fetch(ctx.Request.Context(), "", cookie, marshal)
 	if err != nil {
+		middle.ResponseWithE(ctx, -1, err)
+		return
+	}
+
+	if err = middle.IsCanceled(ctx); err != nil {
 		middle.ResponseWithE(ctx, -1, err)
 		return
 	}
@@ -161,13 +170,34 @@ func Generation(ctx *gin.Context, req gpt.ChatGenerationRequest) {
 		return
 	}
 
+	if err = middle.IsCanceled(ctx); err != nil {
+		middle.ResponseWithE(ctx, -1, err)
+		return
+	}
 	file, err := common.CreateBase64Image(mc.Images[0].Url, "jpg")
 	if err != nil {
 		middle.ResponseWithE(ctx, -1, err)
 		return
 	}
 
-	file, err = common.UploadCatboxFile(proxies, file)
+	if domain == "" {
+		file = fmt.Sprintf("http://127.0.0.1:%d/file/%s", ctx.GetInt("port"), file)
+		ctx.JSON(http.StatusOK, gin.H{
+			"created": time.Now().Unix(),
+			"styles":  models,
+			"data": []map[string]string{
+				{"url": file},
+			},
+			"currStyle": model,
+		})
+		return
+	}
+
+	if err = middle.IsCanceled(ctx); err != nil {
+		middle.ResponseWithE(ctx, -1, err)
+		return
+	}
+	file, err = common.UploadCatboxFile(proxies, domain+"/file/"+file)
 	if err != nil {
 		middle.ResponseWithE(ctx, -1, err)
 		return
@@ -190,7 +220,7 @@ func convertToModel(style string) string {
 	return models[rand.Intn(len(models))]
 }
 
-func fetch(proxies, cookie string, marshal []byte) (*http.Response, error) {
+func fetch(ctx context.Context, proxies, cookie string, marshal []byte) (*http.Response, error) {
 	if !strings.Contains(cookie, "__Secure-next-auth.session-token=") {
 		cookie = "__Secure-next-auth.session-token=" + cookie
 	}
@@ -216,13 +246,18 @@ func fetch(proxies, cookie string, marshal []byte) (*http.Response, error) {
 	h.Add("x-forwarded-for", common.RandomIp())
 	h.Add("cookie", cookie)
 
-	response, err := client.Do(request)
-	if err != nil {
+	if err = middle.IsCanceled(ctx); err != nil {
 		return nil, err
+	}
+
+	response, e := client.Do(request.WithContext(ctx))
+	if e != nil {
+		return nil, e
 	}
 
 	if response.StatusCode != http.StatusOK {
 		return nil, errors.New(response.Status)
 	}
 	return response, nil
+
 }
